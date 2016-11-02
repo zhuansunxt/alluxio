@@ -41,7 +41,6 @@ import org.apache.thrift.TProcessor;
 import org.apache.thrift.protocol.TBinaryProtocol;
 import org.apache.thrift.transport.TServerTransport;
 import org.apache.thrift.transport.TServerSocket;
-import org.apache.thrift.transport.TNonblockingServerTransport;
 import org.apache.thrift.transport.TNonblockingServerSocket;
 import org.apache.thrift.transport.TTransportFactory;
 import org.apache.thrift.server.THsHaServer;
@@ -255,7 +254,7 @@ public class AlluxioMaster implements Server {
 
       // TODO(xiaotong): Add a config option to set server type.
       // Default RPC server type is threaded-pool server
-      mRPCServerType = RPCServerType.THREADED_POOL_SERVER;
+      mRPCServerType = RPCServerType.THREADED_SELECTOR_SERVER;
 
       int rpcServerStopTimeVal;
       if (Configuration.getBoolean(PropertyKey.TEST_MODE)) {
@@ -279,20 +278,20 @@ public class AlluxioMaster implements Server {
         case HSHA_SERVER:
           mTServerSocket = new TNonblockingServerSocket(NetworkAddressUtils
                   .getBindAddress(ServiceType.MASTER_RPC));
-          mRPCServerArgs = new THsHaServer.Args((TNonblockingServerTransport) mTServerSocket);
+          mRPCServerArgs = new THsHaServer.Args((TNonblockingServerSocket) mTServerSocket);
 
           // Set half-sync-half-async server's specific parameters.
           // TODO(xiaotong): Add configuration options for half-sync-half-async server.
           ((THsHaServer.Args) mRPCServerArgs)
-                  .minWorkerThreads(32)
-                  .maxWorkerThreads(256)
+                  .minWorkerThreads(512)
+                  .maxWorkerThreads(1024)
                   .stopTimeoutVal(rpcServerStopTimeVal);
           break;
         case THREADED_SELECTOR_SERVER:
           mTServerSocket = new TNonblockingServerSocket(NetworkAddressUtils
                   .getBindAddress(ServiceType.MASTER_RPC));
           mRPCServerArgs = new TThreadedSelectorServer
-                  .Args((TNonblockingServerTransport) mTServerSocket);
+                  .Args((TNonblockingServerSocket) mTServerSocket);
 
           // Set threaded-selector server's specific parameters.
           // TODO(xiaotong): Add configuration options for threaded-selector server.
