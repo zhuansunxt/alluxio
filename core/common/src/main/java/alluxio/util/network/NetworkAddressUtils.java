@@ -22,6 +22,7 @@ import alluxio.wire.WorkerNetAddress;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
 import org.apache.thrift.transport.TServerSocket;
+import org.apache.thrift.transport.TServerTransport;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -508,7 +509,7 @@ public final class NetworkAddressUtils {
    * @return the thrift port for the underline socket
    * @see #getThriftSocket(org.apache.thrift.transport.TServerSocket)
    */
-  public static int getThriftPort(TServerSocket thriftSocket) {
+  public static int getThriftPort(TServerTransport thriftSocket) {
     return getThriftSocket(thriftSocket).getLocalPort();
   }
 
@@ -519,7 +520,7 @@ public final class NetworkAddressUtils {
    * @param thriftSocket the underline thrift socket
    * @return the server socket
    */
-  public static ServerSocket getThriftSocket(final TServerSocket thriftSocket) {
+  public static ServerSocket getThriftSocket(final TServerTransport thriftSocket) {
     try {
       Field field = TServerSocket.class.getDeclaredField("serverSocket_");
       field.setAccessible(true);

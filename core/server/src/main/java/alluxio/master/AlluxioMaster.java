@@ -39,11 +39,16 @@ import com.google.common.collect.Lists;
 import org.apache.thrift.TMultiplexedProcessor;
 import org.apache.thrift.TProcessor;
 import org.apache.thrift.protocol.TBinaryProtocol;
-import org.apache.thrift.server.TServer;
-import org.apache.thrift.server.TThreadPoolServer;
-import org.apache.thrift.server.TThreadPoolServer.Args;
+import org.apache.thrift.transport.TServerTransport;
 import org.apache.thrift.transport.TServerSocket;
+import org.apache.thrift.transport.TNonblockingServerTransport;
+import org.apache.thrift.transport.TNonblockingServerSocket;
 import org.apache.thrift.transport.TTransportFactory;
+import org.apache.thrift.server.THsHaServer;
+import org.apache.thrift.server.TServer;
+import org.apache.thrift.server.TServer.AbstractServerArgs;
+import org.apache.thrift.server.TThreadPoolServer;
+import org.apache.thrift.server.TThreadedSelectorServer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -98,6 +103,7 @@ public class AlluxioMaster implements Server {
     }
   }
 
+  // TODO(Xiaotong): remove mMaxWorkerThreads and mMinWorkerThreads data members.
   /** Maximum number of threads to serve the rpc server. */
   private final int mMaxWorkerThreads;
 
@@ -108,7 +114,20 @@ public class AlluxioMaster implements Server {
   private final int mPort;
 
   /** The socket for thrift rpc server. */
-  private final TServerSocket mTServerSocket;
+  private final TServerTransport mTServerSocket;
+
+  /** RPC server arguments. **/
+  AbstractServerArgs mRPCServerArgs;
+
+  /** RPC server type definition. **/
+  private enum RPCServerType {
+    THREADED_POOL_SERVER,
+    HSHA_SERVER,
+    THREADED_SELECTOR_SERVER
+  }
+
+  /** RPC server type. **/
+  private RPCServerType mRPCServerType;
 
   /** The transport provider to create thrift server transport. */
   private final TransportProvider mTransportProvider;
@@ -212,6 +231,7 @@ public class AlluxioMaster implements Server {
   }
 
   protected AlluxioMaster() {
+    // TODO(xiaotong): remove below initialization and precondition check.
     mMinWorkerThreads = Configuration.getInt(PropertyKey.MASTER_WORKER_THREADS_MIN);
     mMaxWorkerThreads = Configuration.getInt(PropertyKey.MASTER_WORKER_THREADS_MAX);
 
@@ -232,8 +252,64 @@ public class AlluxioMaster implements Server {
             "Alluxio master web port is only allowed to be zero in test mode.");
       }
       mTransportProvider = TransportProvider.Factory.create();
-      mTServerSocket =
-          new TServerSocket(NetworkAddressUtils.getBindAddress(ServiceType.MASTER_RPC));
+
+      // TODO(xiaotong): Add a config option to set server type.
+      // Default RPC server type is threaded-pool server
+      mRPCServerType = RPCServerType.THREADED_POOL_SERVER;
+
+      int rpcServerStopTimeVal;
+      if (Configuration.getBoolean(PropertyKey.TEST_MODE)) {
+        rpcServerStopTimeVal = 0;
+      } else {
+        rpcServerStopTimeVal = Constants.THRIFT_STOP_TIMEOUT_SECONDS;
+      }
+
+      switch (mRPCServerType) {
+        case THREADED_POOL_SERVER:
+          mTServerSocket = new TServerSocket(NetworkAddressUtils
+                  .getBindAddress(ServiceType.MASTER_RPC));
+          mRPCServerArgs = new TThreadPoolServer.Args(mTServerSocket);
+
+          // Set thread-pool RPC server's specific parameters.
+          ((TThreadPoolServer.Args) mRPCServerArgs)
+                  .minWorkerThreads(Configuration.getInt(PropertyKey.MASTER_WORKER_THREADS_MIN))
+                  .maxWorkerThreads(Configuration.getInt(PropertyKey.MASTER_WORKER_THREADS_MAX))
+                  .stopTimeoutVal(rpcServerStopTimeVal);
+          break;
+        case HSHA_SERVER:
+          mTServerSocket = new TNonblockingServerSocket(NetworkAddressUtils
+                  .getBindAddress(ServiceType.MASTER_RPC));
+          mRPCServerArgs = new THsHaServer.Args((TNonblockingServerTransport) mTServerSocket);
+
+          // Set half-sync-half-async server's specific parameters.
+          // TODO(xiaotong): Add configuration options for half-sync-half-async server.
+          ((THsHaServer.Args) mRPCServerArgs)
+                  .minWorkerThreads(32)
+                  .maxWorkerThreads(256)
+                  .stopTimeoutVal(rpcServerStopTimeVal);
+          break;
+        case THREADED_SELECTOR_SERVER:
+          mTServerSocket = new TNonblockingServerSocket(NetworkAddressUtils
+                  .getBindAddress(ServiceType.MASTER_RPC));
+          mRPCServerArgs = new TThreadedSelectorServer
+                  .Args((TNonblockingServerTransport) mTServerSocket);
+
+          // Set threaded-selector server's specific parameters.
+          // TODO(xiaotong): Add configuration options for threaded-selector server.
+          ((TThreadedSelectorServer.Args) mRPCServerArgs)
+                  .selectorThreads(4)
+                  .workerThreads(32)
+                  .stopTimeoutVal(rpcServerStopTimeVal)
+                  .acceptPolicy(TThreadedSelectorServer.Args.AcceptPolicy.FAST_ACCEPT)
+                  .acceptQueueSizePerThread(4);
+          break;
+        default:
+          mTServerSocket = new TServerSocket(NetworkAddressUtils
+                  .getBindAddress(ServiceType.MASTER_RPC));
+          mRPCServerArgs = new TThreadPoolServer.Args(mTServerSocket);
+          break;
+      }
+
       mPort = NetworkAddressUtils.getThriftPort(mTServerSocket);
       // reset master rpc port
       Configuration.set(PropertyKey.MASTER_RPC_PORT, Integer.toString(mPort));
@@ -471,15 +547,25 @@ public class AlluxioMaster implements Server {
     }
 
     // create master thrift service with the multiplexed processor.
-    Args args = new TThreadPoolServer.Args(mTServerSocket).maxWorkerThreads(mMaxWorkerThreads)
-        .minWorkerThreads(mMinWorkerThreads).processor(processor).transportFactory(transportFactory)
-        .protocolFactory(new TBinaryProtocol.Factory(true, true));
-    if (Configuration.getBoolean(PropertyKey.TEST_MODE)) {
-      args.stopTimeoutVal = 0;
-    } else {
-      args.stopTimeoutVal = Constants.THRIFT_STOP_TIMEOUT_SECONDS;
+    mRPCServerArgs.processor(processor).transportFactory(transportFactory)
+            .protocolFactory(new TBinaryProtocol.Factory(true, true));
+
+    switch (mRPCServerType) {
+      case THREADED_POOL_SERVER:
+        mMasterServiceServer
+                = new TThreadPoolServer((TThreadPoolServer.Args) mRPCServerArgs);
+        break;
+      case HSHA_SERVER:
+        mMasterServiceServer
+                = new THsHaServer((THsHaServer.Args) mRPCServerArgs);
+        break;
+      case THREADED_SELECTOR_SERVER:
+        mMasterServiceServer
+                = new TThreadedSelectorServer((TThreadedSelectorServer.Args) mRPCServerArgs);
+        break;
+      default:
+        break;
     }
-    mMasterServiceServer = new TThreadPoolServer(args);
 
     // start thrift rpc server
     mIsServing = true;
