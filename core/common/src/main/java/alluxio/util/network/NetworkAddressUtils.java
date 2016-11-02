@@ -21,6 +21,7 @@ import alluxio.wire.WorkerNetAddress;
 
 import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
+import org.apache.thrift.transport.TNonblockingServerSocket;
 import org.apache.thrift.transport.TServerSocket;
 import org.apache.thrift.transport.TServerTransport;
 import org.slf4j.Logger;
@@ -502,12 +503,12 @@ public final class NetworkAddressUtils {
 
   /**
    * Gets the port for the underline socket. This function calls
-   * {@link #getThriftSocket(org.apache.thrift.transport.TServerSocket)}, so reflection will be used
-   * to get the port.
+   * {@link #getThriftSocket(org.apache.thrift.transport.TServerTransport)}, so reflection
+   * will be used to get the port.
    *
    * @param thriftSocket the underline socket
    * @return the thrift port for the underline socket
-   * @see #getThriftSocket(org.apache.thrift.transport.TServerSocket)
+   * @see #getThriftSocket(org.apache.thrift.transport.TServerTransport)
    */
   public static int getThriftPort(TServerTransport thriftSocket) {
     return getThriftSocket(thriftSocket).getLocalPort();
@@ -522,7 +523,12 @@ public final class NetworkAddressUtils {
    */
   public static ServerSocket getThriftSocket(final TServerTransport thriftSocket) {
     try {
-      Field field = TServerSocket.class.getDeclaredField("serverSocket_");
+      Field field;
+      if (thriftSocket instanceof TNonblockingServerSocket) {
+        field = TNonblockingServerSocket.class.getDeclaredField("serverSocket_");
+      } else {
+        field = TServerSocket.class.getDeclaredField("serverSocket_");
+      }
       field.setAccessible(true);
       return (ServerSocket) field.get(thriftSocket);
     } catch (NoSuchFieldException | IllegalAccessException e) {
