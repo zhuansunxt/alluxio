@@ -148,6 +148,7 @@ public enum PropertyKey {
   MASTER_WORKER_THREADS_MAX(Name.MASTER_WORKER_THREADS_MAX, 2048),
   MASTER_WORKER_THREADS_MIN(Name.MASTER_WORKER_THREADS_MIN, 512),
   MASTER_WORKER_TIMEOUT_MS(Name.MASTER_WORKER_TIMEOUT_MS, 300000),
+  MASTER_RPC_SERVER_TYPE(Name.MASTER_RPC_SERVER_TYPE, "HSHA_SERVER"),
 
   //
   // Worker related properties
@@ -501,6 +502,7 @@ public enum PropertyKey {
     public static final String MASTER_WORKER_THREADS_MAX = "alluxio.master.worker.threads.max";
     public static final String MASTER_WORKER_THREADS_MIN = "alluxio.master.worker.threads.min";
     public static final String MASTER_WORKER_TIMEOUT_MS = "alluxio.master.worker.timeout.ms";
+    public static final String MASTER_RPC_SERVER_TYPE = "alluxio.master.rpc.type";
 
     //
     // Worker related properties

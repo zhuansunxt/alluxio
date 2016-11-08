@@ -119,7 +119,7 @@ public class AlluxioMaster implements Server {
   AbstractServerArgs mRPCServerArgs;
 
   /** RPC server type definition. **/
-  private enum RPCServerType {
+  public enum RPCServerType {
     THREADED_POOL_SERVER,
     HSHA_SERVER,
     THREADED_SELECTOR_SERVER
@@ -254,7 +254,7 @@ public class AlluxioMaster implements Server {
 
       // TODO(xiaotong): Add a config option to set server type.
       // Default RPC server type is threaded-pool server
-      mRPCServerType = RPCServerType.THREADED_SELECTOR_SERVER;
+      mRPCServerType = Configuration.getEnum(PropertyKey.MASTER_RPC_SERVER_TYPE, RPCServerType.class);
 
       int rpcServerStopTimeVal;
       if (Configuration.getBoolean(PropertyKey.TEST_MODE)) {
