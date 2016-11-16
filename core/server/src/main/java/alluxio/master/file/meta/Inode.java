@@ -16,6 +16,7 @@ import alluxio.master.journal.JournalEntryRepresentable;
 import alluxio.security.authorization.Permission;
 import alluxio.wire.FileInfo;
 
+import com.fasterxml.jackson.databind.ser.impl.FailingSerializer;
 import com.google.common.base.Objects;
 
 import java.util.concurrent.locks.ReentrantReadWriteLock;
@@ -44,7 +45,7 @@ public abstract class Inode<T> implements JournalEntryRepresentable {
   private String mGroup;
   private short mMode;
 
-  private final ReentrantReadWriteLock mLock;
+  private InodeRWLock mLock;
 
   protected Inode(long id, boolean isDirectory) {
     mCreationTimeMs = System.currentTimeMillis();
@@ -59,7 +60,7 @@ public abstract class Inode<T> implements JournalEntryRepresentable {
     mPersistenceState = PersistenceState.NOT_PERSISTED;
     mPinned = false;
     mOwner = "";
-    mLock = new ReentrantReadWriteLock();
+    mLock = null;
   }
 
   /**
@@ -280,42 +281,54 @@ public abstract class Inode<T> implements JournalEntryRepresentable {
    * Acquires the read lock for this inode.
    */
   public void lockRead() {
-    mLock.readLock().lock();
+    mLock= InodeLockManager.getInstance().getLock(mId);
+    mLock.lockRead();
   }
 
   /**
    * Releases the read lock for this inode.
    */
   public void unlockRead() {
-    mLock.readLock().unlock();
+    mLock.unLockRead();
+    InodeLockManager.getInstance().returnLock(mId);
   }
 
   /**
    * Acquires the write lock for this inode.
    */
   public void lockWrite() {
-    mLock.writeLock().lock();
+    mLock = InodeLockManager.getInstance().getLock(mId);
+    mLock.lockWrite();
   }
 
   /**
    * Releases the write lock for this inode.
    */
   public void unlockWrite() {
-    mLock.writeLock().unlock();
+    mLock.unlockWrite();
+    InodeLockManager.getInstance().returnLock(mId);
   }
 
   /**
    * @return returns true if the current thread holds a write lock on this inode, false otherwise
    */
+  // TODO: implement this.
   public boolean isWriteLocked() {
-    return mLock.isWriteLockedByCurrentThread();
+//    InodeRWLock lock = mLock;
+//    if (lock == null) return false;
+//    return lock.isWriteLockedByCurrentThread();
+    return false;
   }
 
   /**
    * @return returns true if the current thread holds a read lock on this inode, false otherwise
    */
+  // TODO: implement this.
   public boolean isReadLocked() {
-    return mLock.getReadHoldCount() > 0;
+//    InodeRWLock lock = mLock;
+//    if (lock == null) return false;
+//    return lock.getReadHoldCount() > 0;
+    return false;
   }
 
   @Override
