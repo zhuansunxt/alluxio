@@ -1,26 +1,47 @@
 package alluxio.master.file.meta;
 
+import javax.annotation.concurrent.ThreadSafe;
 import io.netty.util.internal.chmv8.ConcurrentHashMapV8;
 
+/**
+ * A Singleton of global inode lock manager.
+ *
+ * This singleton uses lazy initialization.
+ */
+@ThreadSafe
+public final class InodeLockManager {
+  private final ConcurrentHashMapV8<Long, InodeRWLock> sLockMap;
 
-public class InodeLockManager {
-  final private static ConcurrentHashMapV8<Long, InodeRWLock> mLockMap
-          = new ConcurrentHashMapV8<>();
+  private static InodeLockManager sInodeLockManager = null;
 
-  private static InodeLockManager instance = new InodeLockManager();
+  // pvevent initialization
+  private InodeLockManager() {
+    if (sInodeLockManager != null)
+      throw new IllegalStateException("Inode lock manager already initialized");
+    sLockMap = new ConcurrentHashMapV8<>();
+  }
 
-  private InodeLockManager() {}
+  public static InodeLockManager get() {
+    // local variable increases performance.
+    InodeLockManager instance = sInodeLockManager;
 
-  public static InodeLockManager getInstance() {
+    // double check for thread-safety and reducing contention.
+    if (instance == null) {
+      synchronized (InodeLockManager.class) {
+        if (instance == null) {
+          instance = sInodeLockManager = new InodeLockManager();
+        }
+      }
+    }
     return instance;
   }
 
   // TODO: implement this.
-  public static InodeRWLock getLock(long inodeID) {
-    return mLockMap.get(inodeID);
+  public InodeRWLock getLock(long inodeID) {
+    return null;
   }
 
   // TODO: implement this.
-  public static void returnLock(long inodeID) {
+  public void returnLock(long inodeID) {
   }
 }
