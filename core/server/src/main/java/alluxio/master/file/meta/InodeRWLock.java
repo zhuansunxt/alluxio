@@ -4,17 +4,21 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 public class InodeRWLock {
-  private AtomicInteger mRefenceCount;
+
+  // Keep track of count of threads holding this RW lock.
+  private AtomicInteger mReferenceCount;
+
   private ReentrantReadWriteLock mLock;
 
   InodeRWLock() {
-    mRefenceCount = new AtomicInteger();   // initial value is 0.
+    mReferenceCount = new AtomicInteger(1);
     mLock = new ReentrantReadWriteLock();
   }
 
   public void lockRead() {
     mLock.readLock().lock();
   }
+
 
   public void unLockRead() {
     mLock.readLock().unlock();
@@ -36,13 +40,15 @@ public class InodeRWLock {
     return mLock.getReadHoldCount();
   }
 
-  // TODO: make this method atomic.
   public void incrementReferenceCount() {
-    mRefenceCount.getAndIncrement();
+    mReferenceCount.getAndIncrement();
   }
 
-  // TODO: make this method atomic.
   public void decrementReferenceCount() {
-    mRefenceCount.getAndDecrement();
+    mReferenceCount.getAndDecrement();
+  }
+
+  public int getReferenceCount() {
+    return mReferenceCount.get();
   }
 }

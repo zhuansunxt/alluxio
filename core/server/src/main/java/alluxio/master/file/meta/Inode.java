@@ -281,7 +281,7 @@ public abstract class Inode<T> implements JournalEntryRepresentable {
    * Acquires the read lock for this inode.
    */
   public void lockRead() {
-    mLock= InodeLockManager.getInstance().getLock(mId);
+    mLock= InodeLockManager.get().getLock(mId);
     mLock.lockRead();
   }
 
@@ -290,14 +290,14 @@ public abstract class Inode<T> implements JournalEntryRepresentable {
    */
   public void unlockRead() {
     mLock.unLockRead();
-    InodeLockManager.getInstance().returnLock(mId);
+    InodeLockManager.get().returnLock(mId);
   }
 
   /**
    * Acquires the write lock for this inode.
    */
   public void lockWrite() {
-    mLock = InodeLockManager.getInstance().getLock(mId);
+    mLock = InodeLockManager.get().getLock(mId);
     mLock.lockWrite();
   }
 
@@ -306,7 +306,7 @@ public abstract class Inode<T> implements JournalEntryRepresentable {
    */
   public void unlockWrite() {
     mLock.unlockWrite();
-    InodeLockManager.getInstance().returnLock(mId);
+    InodeLockManager.get().returnLock(mId);
   }
 
   /**
@@ -314,10 +314,9 @@ public abstract class Inode<T> implements JournalEntryRepresentable {
    */
   // TODO: implement this.
   public boolean isWriteLocked() {
-//    InodeRWLock lock = mLock;
-//    if (lock == null) return false;
-//    return lock.isWriteLockedByCurrentThread();
-    return false;
+    InodeRWLock lock = mLock;
+    if (lock == null) return false;
+    return lock.isWriteLockedByCurrentThread();
   }
 
   /**
@@ -325,10 +324,9 @@ public abstract class Inode<T> implements JournalEntryRepresentable {
    */
   // TODO: implement this.
   public boolean isReadLocked() {
-//    InodeRWLock lock = mLock;
-//    if (lock == null) return false;
-//    return lock.getReadHoldCount() > 0;
-    return false;
+    InodeRWLock lock = mLock;
+    if (lock == null) return false;
+    return lock.getReadHoldCount() > 0;
   }
 
   @Override
