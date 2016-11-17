@@ -19,7 +19,6 @@ public class InodeRWLock {
     mLock.readLock().lock();
   }
 
-
   public void unLockRead() {
     mLock.readLock().unlock();
   }

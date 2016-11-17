@@ -66,9 +66,9 @@ import java.util.concurrent.TimeUnit;
  * For example, (concurrently) creating/deleting/renaming files.
  */
 public class FileSystemMasterIntegrationTest {
-  private static final int DEPTH = 6;
-  private static final int FILES_PER_NODE = 4;
-  private static final int CONCURRENCY_DEPTH = 3;
+  private static final int DEPTH = 6;     // default 6
+  private static final int FILES_PER_NODE = 4;    // default 4
+  private static final int CONCURRENCY_DEPTH = 6;   // default 3
   private static final AlluxioURI ROOT_PATH = new AlluxioURI("/root");
   private static final AlluxioURI ROOT_PATH2 = new AlluxioURI("/root2");
   // Modify current time so that implementations can't accidentally pass unit tests by ignoring
@@ -177,13 +177,18 @@ public class FileSystemMasterIntegrationTest {
 
   @Test
   public void concurrentCreate() throws Exception {
+    long startTime = System.currentTimeMillis();
     ConcurrentCreator concurrentCreator =
         new ConcurrentCreator(DEPTH, CONCURRENCY_DEPTH, ROOT_PATH);
     concurrentCreator.call();
+    long endTime = System.currentTimeMillis();
+    long duration = endTime - startTime;
+    System.out.println("Concurrent Create takes " + duration + " milliseconds");
   }
 
   @Test
   public void concurrentDelete() throws Exception {
+    long startTime = System.currentTimeMillis();
     ConcurrentCreator concurrentCreator =
         new ConcurrentCreator(DEPTH, CONCURRENCY_DEPTH, ROOT_PATH);
     concurrentCreator.call();
@@ -192,22 +197,31 @@ public class FileSystemMasterIntegrationTest {
         new ConcurrentDeleter(DEPTH, CONCURRENCY_DEPTH, ROOT_PATH);
     concurrentDeleter.call();
 
+    long endTime = System.currentTimeMillis();
+    long duration = endTime - startTime;
+    System.out.println("Concurrent Create takes " + duration + " milliseconds");
+
     Assert.assertEquals(0,
         mFsMaster.listStatus(new AlluxioURI("/"), ListStatusOptions.defaults()).size());
   }
 
   @Test
   public void concurrentFree() throws Exception {
+    long startTime = System.currentTimeMillis();
     ConcurrentCreator concurrentCreator =
         new ConcurrentCreator(DEPTH, CONCURRENCY_DEPTH, ROOT_PATH);
     concurrentCreator.call();
 
     ConcurrentFreer concurrentFreer = new ConcurrentFreer(DEPTH, CONCURRENCY_DEPTH, ROOT_PATH);
     concurrentFreer.call();
+    long endTime = System.currentTimeMillis();
+    long duration = endTime - startTime;
+    System.out.println("Concurrent Create takes " + duration + " milliseconds");
   }
 
   @Test
   public void concurrentRename() throws Exception {
+    long startTime = System.currentTimeMillis();
     ConcurrentCreator concurrentCreator =
         new ConcurrentCreator(DEPTH, CONCURRENCY_DEPTH, ROOT_PATH);
     concurrentCreator.call();
@@ -217,6 +231,10 @@ public class FileSystemMasterIntegrationTest {
     ConcurrentRenamer concurrentRenamer = new ConcurrentRenamer(DEPTH, CONCURRENCY_DEPTH, ROOT_PATH,
         ROOT_PATH2, AlluxioURI.EMPTY_URI);
     concurrentRenamer.call();
+
+    long endTime = System.currentTimeMillis();
+    long duration = endTime - startTime;
+    System.out.println("Concurrent Create takes " + duration + " milliseconds");
 
     Assert.assertEquals(numFiles,
         mFsMaster.listStatus(ROOT_PATH2, ListStatusOptions.defaults()).size());
