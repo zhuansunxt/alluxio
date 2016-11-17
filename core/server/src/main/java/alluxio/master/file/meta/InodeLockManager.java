@@ -52,7 +52,7 @@ public final class InodeLockManager {
 
   // Thread safety ensured by locking.
   // TODO: make implementation lock-free.
-  public void returnLock(long inodeID) {
+  public synchronized void returnLock(long inodeID) {
     InodeRWLock inodeLock = sLockMap.get(Long.valueOf(inodeID));
     Preconditions.checkState(inodeLock != null,
             "Entry must exist for any Inode when returning the lock");
