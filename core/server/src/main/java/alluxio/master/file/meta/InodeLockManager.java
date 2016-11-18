@@ -49,16 +49,18 @@ public final class InodeLockManager {
    */
   // TODO(lei): make implementation lock-free.
   public InodeRWLock getLock(Inode inode) {
-    synchronized (inode) {
-      InodeRWLock inodeLock;
-      if ((inodeLock = sLockMap.get(Long.valueOf(inode.mId))) != null) {
-        inodeLock.incrementReferenceCount();
-      } else {
-        inodeLock = new InodeRWLock();
-        sLockMap.put(Long.valueOf(inode.mId), inodeLock);
+    int ref = -1;
+    InodeRWLock inodeLock;
+
+    do {
+      inodeLock = sLockMap.get(inode.mId);
+      while(inodeLock == null) {
+        sLockMap.putIfAbsent(inode.mId, new InodeRWLock());
+        inodeLock = sLockMap.get(inode.mId);
       }
-      return inodeLock;
-    }
+      ref = inodeLock.getReferenceCount();
+    } while (ref == -1 || !inodeLock.compareAndSetReferenceCount(ref, ref+1));
+    return inodeLock;
   }
 
   /**
@@ -68,14 +70,14 @@ public final class InodeLockManager {
    */
   // TODO(lei): make implementation lock-free.
   public void returnLock(Inode inode) {
-    synchronized (inode) {
-      InodeRWLock inodeLock = sLockMap.get(Long.valueOf(inode.mId));
-      Preconditions.checkState(inodeLock != null,
-              "Entry must exist for any Inode when returning the lock");
+    InodeRWLock inodeLock = sLockMap.get(inode.mId);
+    Preconditions.checkState(inodeLock != null,
+            "Entry must exist for any Inode when returning the lock");
 
-      inodeLock.decrementReferenceCount();
-      if (inodeLock.getReferenceCount() == 0) {
-        sLockMap.remove(Long.valueOf(inode.mId));
+    inodeLock.decrementReferenceCount();
+    if (inodeLock.getReferenceCount() == 0) {
+      if(inodeLock.compareAndSetReferenceCount(0, -1)) {
+        sLockMap.remove(inode.mId);
       }
     }
   }

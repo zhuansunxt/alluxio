@@ -11,7 +11,7 @@ public class InodeRWLock {
   private ReentrantReadWriteLock mLock;
 
   InodeRWLock() {
-    mReferenceCount = new AtomicInteger(1);
+    mReferenceCount = new AtomicInteger(0);
     mLock = new ReentrantReadWriteLock();
   }
 
@@ -49,5 +49,9 @@ public class InodeRWLock {
 
   public int getReferenceCount() {
     return mReferenceCount.get();
+  }
+
+  public boolean compareAndSetReferenceCount(int expect, int update) {
+    return mReferenceCount.compareAndSet(expect, update);
   }
 }
