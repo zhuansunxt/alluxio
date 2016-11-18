@@ -37,29 +37,46 @@ public final class InodeLockManager {
     return instance;
   }
 
-  // Thread safety ensured by locking.
-  // TODO: make implementation lock-free.
-  public synchronized InodeRWLock getLock(long inodeID) {
-    InodeRWLock inodeLock;
-    if ((inodeLock = sLockMap.get(Long.valueOf(inodeID))) != null) {
-      inodeLock.incrementReferenceCount();
-    } else {
-      inodeLock = new InodeRWLock();
-      sLockMap.put(Long.valueOf(inodeID), inodeLock);
+  // The current implementation of the getLock and returnLock interface uses
+  // explicit locking to ensure the correctness and thread-safety. The next
+  // step is to investigate a lock-free non-blocking approach to prevent from
+  // performance degration. Some CAS hacks may be utilized.
+
+  /**
+   * Return an {@link InodeRWLock} to a requesting {@link Inode}
+   *
+   * Thread safety ensured by locking.
+   */
+  // TODO(lei): make implementation lock-free.
+  public InodeRWLock getLock(Inode inode) {
+    synchronized (inode) {
+      InodeRWLock inodeLock;
+      if ((inodeLock = sLockMap.get(Long.valueOf(inode.mId))) != null) {
+        inodeLock.incrementReferenceCount();
+      } else {
+        inodeLock = new InodeRWLock();
+        sLockMap.put(Long.valueOf(inode.mId), inodeLock);
+      }
+      return inodeLock;
     }
-    return inodeLock;
   }
 
-  // Thread safety ensured by locking.
-  // TODO: make implementation lock-free.
-  public synchronized void returnLock(long inodeID) {
-    InodeRWLock inodeLock = sLockMap.get(Long.valueOf(inodeID));
-    Preconditions.checkState(inodeLock != null,
-            "Entry must exist for any Inode when returning the lock");
+  /**
+   * Receive back an {@link InodeRWLock} from a {@link Inode}
+   *
+   * Thread safety ensured by locking.
+   */
+  // TODO(lei): make implementation lock-free.
+  public void returnLock(Inode inode) {
+    synchronized (inode) {
+      InodeRWLock inodeLock = sLockMap.get(Long.valueOf(inode.mId));
+      Preconditions.checkState(inodeLock != null,
+              "Entry must exist for any Inode when returning the lock");
 
-    inodeLock.decrementReferenceCount();
-    if (inodeLock.getReferenceCount() == 0) {
-      sLockMap.remove(Long.valueOf(inodeID));
+      inodeLock.decrementReferenceCount();
+      if (inodeLock.getReferenceCount() == 0) {
+        sLockMap.remove(Long.valueOf(inode.mId));
+      }
     }
   }
 }
