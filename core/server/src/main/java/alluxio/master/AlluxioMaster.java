@@ -102,7 +102,6 @@ public class AlluxioMaster implements Server {
     }
   }
 
-  // TODO(Xiaotong): remove mMaxWorkerThreads and mMinWorkerThreads data members.
   /** Maximum number of threads to serve the rpc server. */
   private final int mMaxWorkerThreads;
 
@@ -230,14 +229,6 @@ public class AlluxioMaster implements Server {
   }
 
   protected AlluxioMaster() {
-    // TODO(xiaotong): remove below initialization and precondition check.
-    mMinWorkerThreads = Configuration.getInt(PropertyKey.MASTER_WORKER_THREADS_MIN);
-    mMaxWorkerThreads = Configuration.getInt(PropertyKey.MASTER_WORKER_THREADS_MAX);
-
-    Preconditions.checkArgument(mMaxWorkerThreads >= mMinWorkerThreads,
-        PropertyKey.MASTER_WORKER_THREADS_MAX + " can not be less than "
-            + PropertyKey.MASTER_WORKER_THREADS_MIN);
-
     try {
       // Extract the port from the generated socket.
       // When running tests, it is fine to use port '0' so the system will figure out what port to
@@ -269,10 +260,17 @@ public class AlluxioMaster implements Server {
                   .getBindAddress(ServiceType.MASTER_RPC));
           mRPCServerArgs = new TThreadPoolServer.Args(mTServerSocket);
 
+          mMinWorkerThreads = Configuration.getInt(PropertyKey.MASTER_WORKER_THREADS_MIN);
+          mMaxWorkerThreads = Configuration.getInt(PropertyKey.MASTER_WORKER_THREADS_MAX);
+          Preconditions.checkArgument(mMaxWorkerThreads >= mMinWorkerThreads,
+                  PropertyKey.MASTER_WORKER_THREADS_MAX + " can not be less than "
+                          + PropertyKey.MASTER_WORKER_THREADS_MIN);
+
+
           // Set thread-pool RPC server's specific parameters.
           ((TThreadPoolServer.Args) mRPCServerArgs)
-                  .minWorkerThreads(Configuration.getInt(PropertyKey.MASTER_WORKER_THREADS_MIN))
-                  .maxWorkerThreads(Configuration.getInt(PropertyKey.MASTER_WORKER_THREADS_MAX))
+                  .minWorkerThreads(mMinWorkerThreads)
+                  .maxWorkerThreads(mMaxWorkerThreads)
                   .stopTimeoutVal(rpcServerStopTimeVal);
           break;
         case HSHA_SERVER:
@@ -281,10 +279,16 @@ public class AlluxioMaster implements Server {
           mRPCServerArgs = new THsHaServer.Args((TNonblockingServerSocket) mTServerSocket);
 
           // Set half-sync-half-async server's specific parameters.
-          // TODO(xiaotong): Add configuration options for half-sync-half-async server.
+
+          mMinWorkerThreads = Configuration.getInt(PropertyKey.MASTER_RPC_HSHA_WORKER_THREADS_MIN);
+          mMaxWorkerThreads = Configuration.getInt(PropertyKey.MASTER_RPC_HSHA_WORKER_THREADS_MAX);
+          Preconditions.checkArgument(mMaxWorkerThreads >= mMinWorkerThreads,
+                  PropertyKey.MASTER_RPC_HSHA_WORKER_THREADS_MAX + " can not be less than "
+                          + PropertyKey.MASTER_RPC_HSHA_WORKER_THREADS_MIN);
+
           ((THsHaServer.Args) mRPCServerArgs)
-                  .minWorkerThreads(512)
-                  .maxWorkerThreads(1024)
+                  .minWorkerThreads(mMinWorkerThreads)
+                  .maxWorkerThreads(mMaxWorkerThreads)
                   .stopTimeoutVal(rpcServerStopTimeVal);
           break;
         case THREADED_SELECTOR_SERVER:
@@ -294,18 +298,39 @@ public class AlluxioMaster implements Server {
                   .Args((TNonblockingServerSocket) mTServerSocket);
 
           // Set threaded-selector server's specific parameters.
-          // TODO(xiaotong): Add configuration options for threaded-selector server.
+          mMinWorkerThreads = Configuration.getInt(PropertyKey.MASTER_RPC_MULTISELECTOR_WORKER_THREADS);
+          mMaxWorkerThreads = Configuration.getInt(PropertyKey.MASTER_RPC_MULTISELECTOR_WORKER_THREADS);
+          int selectorThreads =
+                  Configuration.getInt(PropertyKey.MASTER_RPC_MULTISELECTOR_SELECTOR_THREADS);
+          TThreadedSelectorServer.Args.AcceptPolicy acceptPolicy =
+                  Configuration.getEnum(PropertyKey.MASTER_RPC_MULTISELECTOR_ACCEPT_POLICY,
+                          TThreadedSelectorServer.Args.AcceptPolicy.class);
+          int acceptQueueSize =
+                  Configuration.getInt(PropertyKey.MASTER_RPC_MULTISELECTOR_ACCEPT_QUEUESIZE);
+
           ((TThreadedSelectorServer.Args) mRPCServerArgs)
-                  .selectorThreads(4)
-                  .workerThreads(32)
+                  .selectorThreads(selectorThreads)
+                  .workerThreads(mMaxWorkerThreads)
                   .stopTimeoutVal(rpcServerStopTimeVal)
-                  .acceptPolicy(TThreadedSelectorServer.Args.AcceptPolicy.FAST_ACCEPT)
-                  .acceptQueueSizePerThread(4);
+                  .acceptPolicy(acceptPolicy)
+                  .acceptQueueSizePerThread(acceptQueueSize);
           break;
         default:
           mTServerSocket = new TServerSocket(NetworkAddressUtils
                   .getBindAddress(ServiceType.MASTER_RPC));
           mRPCServerArgs = new TThreadPoolServer.Args(mTServerSocket);
+          mMinWorkerThreads = 0;
+          mMaxWorkerThreads = 0;
+          Preconditions.checkArgument(mMaxWorkerThreads >= mMinWorkerThreads,
+                  PropertyKey.MASTER_WORKER_THREADS_MAX + " can not be less than "
+                          + PropertyKey.MASTER_WORKER_THREADS_MIN);
+
+
+          // Set thread-pool RPC server's specific parameters.
+          ((TThreadPoolServer.Args) mRPCServerArgs)
+                  .minWorkerThreads(mMinWorkerThreads)
+                  .maxWorkerThreads(mMaxWorkerThreads)
+                  .stopTimeoutVal(rpcServerStopTimeVal);
           break;
       }
 

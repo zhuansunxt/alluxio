@@ -149,6 +149,14 @@ public enum PropertyKey {
   MASTER_WORKER_THREADS_MIN(Name.MASTER_WORKER_THREADS_MIN, 512),
   MASTER_WORKER_TIMEOUT_MS(Name.MASTER_WORKER_TIMEOUT_MS, 300000),
   MASTER_RPC_SERVER_TYPE(Name.MASTER_RPC_SERVER_TYPE, "HSHA_SERVER"),
+  // for Half-sync-half-async RPC server.
+  MASTER_RPC_HSHA_WORKER_THREADS_MAX(Name.MASTER_RPC_HSHA_WORKER_THREADS_MAX, "256"),
+  MASTER_RPC_HSHA_WORKER_THREADS_MIN(Name.MASTER_RPC_HSHA_WORKER_THREADS_MIN, "16"),
+  // for threades-selector RPC server
+  MASTER_RPC_MULTISELECTOR_WORKER_THREADS(Name.MASTER_RPC_MULTISELECTOR_WORKER_THREADS, "64"),
+  MASTER_RPC_MULTISELECTOR_SELECTOR_THREADS(Name.MASTER_RPC_MULTISELECTOR_SELECTOR_THREADS, "4"),
+  MASTER_RPC_MULTISELECTOR_ACCEPT_POLICY(Name.MASTER_RPC_MULTISELECTOR_ACCEPT_POLICY, "FAST_ACCEPT"),
+  MASTER_RPC_MULTISELECTOR_ACCEPT_QUEUESIZE(Name.MASTER_RPC_MULTISELECTOR_ACCEPT_QUEUESIZE, "4"),
 
   //
   // Worker related properties
@@ -503,6 +511,23 @@ public enum PropertyKey {
     public static final String MASTER_WORKER_THREADS_MIN = "alluxio.master.worker.threads.min";
     public static final String MASTER_WORKER_TIMEOUT_MS = "alluxio.master.worker.timeout.ms";
     public static final String MASTER_RPC_SERVER_TYPE = "alluxio.master.rpc.type";
+
+    // for Half-sync-half-async RPC server.
+    public static final String MASTER_RPC_HSHA_WORKER_THREADS_MAX
+            = "alluxio.master.hsha.worker.threads.max";
+    public static final String MASTER_RPC_HSHA_WORKER_THREADS_MIN
+             = "alluxio.master.hsha.worker.threads.min";
+
+    // for threades-selector RPC server
+    public static final String MASTER_RPC_MULTISELECTOR_WORKER_THREADS
+             = "alluxio.master.multiselector.worker.threads";
+    public static final String MASTER_RPC_MULTISELECTOR_SELECTOR_THREADS
+             = "alluxio.master.multiselector.selector.threads";
+    public static final String MASTER_RPC_MULTISELECTOR_ACCEPT_POLICY
+             = "alluxio.master.multiselector.accept.policy";
+    public static final String MASTER_RPC_MULTISELECTOR_ACCEPT_QUEUESIZE
+             = "alluxio.master.multiselector.accept.queuesize";
+
 
     //
     // Worker related properties
