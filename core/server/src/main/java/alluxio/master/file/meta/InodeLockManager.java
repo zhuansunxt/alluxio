@@ -3,7 +3,10 @@ package alluxio.master.file.meta;
 import javax.annotation.concurrent.ThreadSafe;
 
 import com.google.common.base.Preconditions;
+import com.sun.javafx.collections.MappingChange;
 import io.netty.util.internal.chmv8.ConcurrentHashMapV8;
+
+import java.util.Map;
 
 /**
  * A Singleton of global inode lock manager.
@@ -42,6 +45,10 @@ public final class InodeLockManager {
   // step is to investigate a lock-free non-blocking approach to prevent from
   // performance degration. Some CAS hacks may be utilized.
 
+  public InodeRWLock findLock(Inode inode) {
+    return sLockMap.get(inode.mId);
+  }
+
   /**
    * Return an {@link InodeRWLock} to a requesting {@link Inode}
    *
@@ -79,6 +86,16 @@ public final class InodeLockManager {
       if(inodeLock.compareAndSetReferenceCount(0, -1)) {
         sLockMap.remove(inode.mId);
       }
+    }
+  }
+
+  public void printLockMap() {
+    for (Map.Entry<Long, InodeRWLock> entry : sLockMap.entrySet()) {
+      String line = "";
+      line += entry.getKey().toString();
+      line += " : ";
+      line += entry.getValue().toString();
+      System.out.println(line);
     }
   }
 }

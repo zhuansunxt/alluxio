@@ -45,7 +45,6 @@ public abstract class Inode<T> implements JournalEntryRepresentable {
   private String mGroup;
   private short mMode;
 
-  private InodeRWLock mLock;
 
   protected Inode(long id, boolean isDirectory) {
     mCreationTimeMs = System.currentTimeMillis();
@@ -60,7 +59,6 @@ public abstract class Inode<T> implements JournalEntryRepresentable {
     mPersistenceState = PersistenceState.NOT_PERSISTED;
     mPinned = false;
     mOwner = "";
-    mLock = null;
   }
 
   /**
@@ -281,15 +279,14 @@ public abstract class Inode<T> implements JournalEntryRepresentable {
    * Acquires the read lock for this inode.
    */
   public void lockRead() {
-    mLock= InodeLockManager.get().getLock(this);
-    mLock.lockRead();
+    InodeLockManager.get().getLock(this).lockRead();
   }
 
   /**
    * Releases the read lock for this inode.
    */
   public void unlockRead() {
-    mLock.unLockRead();
+    InodeLockManager.get().findLock(this).unLockRead();
     InodeLockManager.get().returnLock(this);
   }
 
@@ -297,15 +294,14 @@ public abstract class Inode<T> implements JournalEntryRepresentable {
    * Acquires the write lock for this inode.
    */
   public void lockWrite() {
-    mLock = InodeLockManager.get().getLock(this);
-    mLock.lockWrite();
+    InodeLockManager.get().getLock(this).lockWrite();
   }
 
   /**
    * Releases the write lock for this inode.
    */
   public void unlockWrite() {
-    mLock.unlockWrite();
+    InodeLockManager.get().findLock(this).unlockWrite();
     InodeLockManager.get().returnLock(this);
   }
 
@@ -314,8 +310,9 @@ public abstract class Inode<T> implements JournalEntryRepresentable {
    */
   // TODO: implement this.
   public boolean isWriteLocked() {
-    InodeRWLock lock = mLock;
-    if (lock == null) return false;
+    InodeRWLock lock = InodeLockManager.get().findLock(this);
+    if (lock == null)
+      return false;
     return lock.isWriteLockedByCurrentThread();
   }
 
@@ -324,8 +321,9 @@ public abstract class Inode<T> implements JournalEntryRepresentable {
    */
   // TODO: implement this.
   public boolean isReadLocked() {
-    InodeRWLock lock = mLock;
-    if (lock == null) return false;
+    InodeRWLock lock = InodeLockManager.get().findLock(this);
+    if (lock == null)
+      return false;
     return lock.getReadHoldCount() > 0;
   }
 

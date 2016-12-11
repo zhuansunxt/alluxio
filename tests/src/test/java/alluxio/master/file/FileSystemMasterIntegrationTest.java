@@ -25,10 +25,7 @@ import alluxio.heartbeat.HeartbeatScheduler;
 import alluxio.heartbeat.ManuallyScheduleHeartbeat;
 import alluxio.master.MasterTestUtils;
 import alluxio.master.block.BlockMaster;
-import alluxio.master.file.meta.InodePathPair;
-import alluxio.master.file.meta.InodeTree;
-import alluxio.master.file.meta.LockedInodePath;
-import alluxio.master.file.meta.TtlIntervalRule;
+import alluxio.master.file.meta.*;
 import alluxio.master.file.options.CompleteFileOptions;
 import alluxio.master.file.options.CreateDirectoryOptions;
 import alluxio.master.file.options.CreateFileOptions;
@@ -183,6 +180,7 @@ public class FileSystemMasterIntegrationTest {
     concurrentCreator.call();
     long endTime = System.currentTimeMillis();
     long duration = endTime - startTime;
+    InodeLockManager.get().printLockMap();
     System.out.println("Concurrent Create takes " + duration + " milliseconds");
   }
 

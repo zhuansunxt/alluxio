@@ -15,6 +15,16 @@ public class InodeRWLock {
     mLock = new ReentrantReadWriteLock();
   }
 
+  public String toString() {
+    String str = "[";
+    str += mLock.toString();
+    str += ",";
+    str += mReferenceCount.toString();
+    str += "]";
+
+    return str;
+  }
+
   public void lockRead() {
     mLock.readLock().lock();
   }
