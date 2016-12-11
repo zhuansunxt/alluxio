@@ -38,12 +38,12 @@ public final class InodeLockManager {
     return instance;
   }
 
-  private int getHash(int inodeID, int depth) {
-    return inodeID % lockTable.get(depth).size();
+  private int getHash(long inodeID, int depth) {
+    return (int)(inodeID % lockTable.get(depth).size());
   }
 
   public void lock(Inode inode, LockMode lockMode) {
-    int depth = (int)inode.getParentId();     // TODO(xiaotong): change method.
+    int depth = (int)inode.getDepth();
 
     if (depth >= lockTable.size()) {
       if (depth > lockTable.size()) {
@@ -54,22 +54,20 @@ public final class InodeLockManager {
       // Add another layer of the lock. Ensure the atomicity of the adding.
       tableLock.lock();
       try {
-        lockTable.add(new ArrayList());
-        int lockCount;
-        if (depth == 0) {
-          lockCount = 1;
-        } else {
-          lockCount = depth * depth;
-        }
-        for (int i = 0; i < lockCount; i++) {
-          lockTable.get(depth).add(new ReentrantReadWriteLock());
+        if (depth == lockTable.size()) {
+          lockTable.add(new ArrayList());
+          int lockCount = Math.min(512, (depth+1) * (depth+1));
+          for (int i = 0; i < lockCount; i++) {
+            lockTable.get(depth).add(new ReentrantReadWriteLock());
+          }
         }
       } finally {
         tableLock.unlock();
       }
     }
+    int hash = getHash(inode.getId(), depth);
 
-    int hash = getHash((int)inode.getId(), depth);
+//    System.out.printf("id %d, hash %d, depth %d%n",inode.getId(), hash, depth );
     if (lockMode == LockMode.READ) {
       lockTable.get(depth).get(hash).readLock().lock();
     } else {
@@ -78,8 +76,8 @@ public final class InodeLockManager {
   }
 
   public void unlock(Inode inode, LockMode lockMode) {
-    int depth = (int)inode.getParentId();     // TODO(xiaotong): change mothod.
-    int hash = getHash((int)inode.getId(), depth);
+    int depth = (int)inode.getDepth();
+    int hash = getHash(inode.getId(), depth);
 
     if (lockMode == LockMode.READ) {
       lockTable.get(depth).get(hash).readLock().unlock();
@@ -89,22 +87,22 @@ public final class InodeLockManager {
   }
 
   public boolean isReadLocked(Inode inode) {
-    int depth = (int)inode.getParentId();     // TODO(xiaotong): change method.
+    int depth = (int)inode.getDepth();
     if (depth >= lockTable.size()) {
       return false;
     }
 
-    int hash = getHash((int)inode.getId(), depth);
+    int hash = getHash(inode.getId(), depth);
     return lockTable.get(depth).get(hash).getReadHoldCount() > 0;
   }
 
   public boolean isWriteLocked(Inode inode) {
-    int depth = (int)inode.getParentId();     // TODO(xiaotong): change method.
+    int depth = (int)inode.getDepth();
     if (depth >= lockTable.size()) {
       return false;
     }
 
-    int hash = getHash((int)inode.getId(), depth);
+    int hash = getHash(inode.getId(), depth);
     return lockTable.get(depth).get(hash).isWriteLockedByCurrentThread();
 
   }

@@ -108,6 +108,7 @@ public abstract class Inode<T> implements JournalEntryRepresentable {
    * @return the depth of the inode
    */
   public short getDepth() {
+//    System.out.printf("get depth:%d%n",mDepth);
     return mDepth;
   }
 
@@ -219,6 +220,7 @@ public abstract class Inode<T> implements JournalEntryRepresentable {
   public T setParentId(long parentId, short depth) {
     mParentId = parentId;
     mDepth = depth;
+//    System.out.printf("depth:%d%n",depth);
     return getThis();
   }
 
