@@ -147,7 +147,7 @@ public final class InodeTree implements JournalCheckpointStreamable {
     if (mRoot == null) {
       mRoot = InodeDirectory
           .create(mDirectoryIdGenerator.getNewDirectoryId(), NO_PARENT, ROOT_INODE_NAME,
-              CreateDirectoryOptions.defaults().setPermission(permission));
+              CreateDirectoryOptions.defaults().setPermission(permission), (short)0);
       mRoot.setPersistenceState(PersistenceState.PERSISTED);
       mInodes.add(mRoot);
       mCachedInode = mRoot;
@@ -563,7 +563,7 @@ public final class InodeTree implements JournalCheckpointStreamable {
     for (int k = pathIndex; k < (pathComponents.length - 1); k++) {
       InodeDirectory dir =
           InodeDirectory.create(mDirectoryIdGenerator.getNewDirectoryId(),
-              currentInodeDirectory.getId(), pathComponents[k], missingDirOptions);
+              currentInodeDirectory.getId(), pathComponents[k], missingDirOptions, (short)(currentInodeDirectory.getDepth()+ 1) );
       // Lock the newly created inode before subsequent operations, and add it to the lock group.
       lockList.lockWrite(dir);
 
@@ -603,7 +603,7 @@ public final class InodeTree implements JournalCheckpointStreamable {
       if (options instanceof CreateDirectoryOptions) {
         CreateDirectoryOptions directoryOptions = (CreateDirectoryOptions) options;
         lastInode = InodeDirectory.create(mDirectoryIdGenerator.getNewDirectoryId(),
-            currentInodeDirectory.getId(), name, directoryOptions);
+            currentInodeDirectory.getId(), name, directoryOptions, (short)(currentInodeDirectory.getDepth()+1));
         // Lock the created inode before subsequent operations, and add it to the lock group.
         lockList.lockWrite(lastInode);
         if (directoryOptions.isPersisted()) {
@@ -613,7 +613,7 @@ public final class InodeTree implements JournalCheckpointStreamable {
       } else if (options instanceof CreateFileOptions) {
         CreateFileOptions fileOptions = (CreateFileOptions) options;
         lastInode = InodeFile.create(mContainerIdGenerator.getNewContainerId(),
-            currentInodeDirectory.getId(), name, System.currentTimeMillis(), fileOptions);
+            currentInodeDirectory.getId(), name, System.currentTimeMillis(), fileOptions, (short)(currentInodeDirectory.getDepth()+1));
         // Lock the created inode before subsequent operations, and add it to the lock group.
         lockList.lockWrite(lastInode);
         if (currentInodeDirectory.isPinned()) {

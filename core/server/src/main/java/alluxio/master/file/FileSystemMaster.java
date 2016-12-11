@@ -1553,7 +1553,7 @@ public final class FileSystemMaster extends AbstractMaster {
     InodeDirectory dstParentInode = dstInodePath.getParentInodeDirectory();
     srcParentInode.removeChild(srcInode);
     srcParentInode.setLastModificationTimeMs(opTimeMs);
-    srcInode.setParentId(dstParentInode.getId());
+    srcInode.setParentId(dstParentInode.getId(), (short)(dstParentInode.getDepth()+1));
     srcInode.setName(dstPath.getName());
     dstParentInode.addChild(srcInode);
     dstParentInode.setLastModificationTimeMs(opTimeMs);

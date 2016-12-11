@@ -66,9 +66,9 @@ public final class InodeDirectoryTest extends AbstractInodeTest {
    */
   @Test
   public void equalsTest() throws Exception {
-    InodeDirectory inode1 = InodeDirectory.create(1, 0, "test1", CreateDirectoryOptions.defaults());
-    InodeDirectory inode2 = InodeDirectory.create(1, 0, "test2", CreateDirectoryOptions.defaults());
-    InodeDirectory inode3 = InodeDirectory.create(3, 0, "test3", CreateDirectoryOptions.defaults());
+    InodeDirectory inode1 = InodeDirectory.create(1, 0, "test1", CreateDirectoryOptions.defaults(), (short)1);
+    InodeDirectory inode2 = InodeDirectory.create(1, 0, "test2", CreateDirectoryOptions.defaults(), (short)1);
+    InodeDirectory inode3 = InodeDirectory.create(3, 0, "test3", CreateDirectoryOptions.defaults(), (short)1);
     Assert.assertTrue(inode1.equals(inode2));
     Assert.assertTrue(inode1.equals(inode1));
     Assert.assertFalse(inode1.equals(inode3));
@@ -179,14 +179,15 @@ public final class InodeDirectoryTest extends AbstractInodeTest {
   }
 
   /**
-   * Tests the {@link InodeDirectory#setParentId(long)} method.
+   * Tests the {@link InodeDirectory#setParentId(long, short)} method.
    */
   @Test
   public void setParentId() {
     InodeDirectory inode1 = createInodeDirectory();
     Assert.assertEquals(0, inode1.getParentId());
-    inode1.setParentId(2);
+    inode1.setParentId(2, (short)1);
     Assert.assertEquals(2, inode1.getParentId());
+    Assert.assertEquals(1, inode1.getDepth());
   }
 
   /**

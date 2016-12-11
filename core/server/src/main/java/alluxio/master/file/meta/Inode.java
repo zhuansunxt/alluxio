@@ -43,6 +43,7 @@ public abstract class Inode<T> implements JournalEntryRepresentable {
   private String mOwner;
   private String mGroup;
   private short mMode;
+  private short mDepth;
 
   private final ReentrantReadWriteLock mLock;
 
@@ -102,6 +103,13 @@ public abstract class Inode<T> implements JournalEntryRepresentable {
    */
   public short getMode() {
     return mMode;
+  }
+
+  /**
+   * @return the depth of the inode
+   */
+  public short getDepth() {
+    return mDepth;
   }
 
   /**
@@ -209,8 +217,9 @@ public abstract class Inode<T> implements JournalEntryRepresentable {
    * @param parentId the parent id to use
    * @return the updated object
    */
-  public T setParentId(long parentId) {
+  public T setParentId(long parentId, short depth) {
     mParentId = parentId;
+    mDepth = depth;
     return getThis();
   }
 

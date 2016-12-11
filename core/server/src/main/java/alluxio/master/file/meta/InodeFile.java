@@ -300,7 +300,7 @@ public final class InodeFile extends Inode<InodeFile> {
         .setCreationTimeMs(entry.getCreationTimeMs())
         .setLastModificationTimeMs(entry.getLastModificationTimeMs())
         .setLength(entry.getLength())
-        .setParentId(entry.getParentId())
+        .setParentId(entry.getParentId(), (short)0)
         .setPersistenceState(PersistenceState.valueOf(entry.getPersistenceState()))
         .setPinned(entry.getPinned())
         .setTtl(entry.getTtl())
@@ -319,7 +319,7 @@ public final class InodeFile extends Inode<InodeFile> {
    * @return the {@link InodeFile} representation
    */
   public static InodeFile create(long blockContainerId, long parentId, String name,
-      long creationTimeMs, CreateFileOptions fileOptions) {
+      long creationTimeMs, CreateFileOptions fileOptions, short depth) {
     Permission permission = new Permission(fileOptions.getPermission());
     if (fileOptions.isDefaultMode()) {
       permission.setMode(Mode.getDefault()).applyFileUMask();
@@ -330,7 +330,7 @@ public final class InodeFile extends Inode<InodeFile> {
         .setName(name)
         .setTtl(fileOptions.getTtl())
         .setTtlAction(fileOptions.getTtlAction())
-        .setParentId(parentId)
+        .setParentId(parentId, depth)
         .setPermission(permission)
         .setPersistenceState(fileOptions.isPersisted() ? PersistenceState.PERSISTED
             : PersistenceState.NOT_PERSISTED);

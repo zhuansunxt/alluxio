@@ -37,12 +37,12 @@ public abstract class AbstractInodeTest {
 
   protected static InodeDirectory createInodeDirectory() {
     return InodeDirectory.create(1, 0, "test1",
-        CreateDirectoryOptions.defaults().setPermission(TEST_PERMISSION));
+        CreateDirectoryOptions.defaults().setPermission(TEST_PERMISSION), (short)1);
   }
 
   protected InodeFile createInodeFile(long id) {
     return InodeFile.create(id, 1, "testFile" + id, 0,
         CreateFileOptions.defaults().setBlockSizeBytes(Constants.KB)
-            .setPermission(TEST_PERMISSION));
+            .setPermission(TEST_PERMISSION), (short)2);
   }
 }

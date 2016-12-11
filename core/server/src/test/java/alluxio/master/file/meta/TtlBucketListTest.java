@@ -33,11 +33,11 @@ public final class TtlBucketListTest {
   private static final long BUCKET2_START = BUCKET1_END;
   private static final long BUCKET2_END =  BUCKET2_START + BUCKET_INTERVAL;
   private static final InodeFile BUCKET1_FILE1 =
-      InodeFile.create(0, 0, "ignored", 0, CreateFileOptions.defaults().setTtl(BUCKET1_START));
+      InodeFile.create(0, 0, "ignored", 0, CreateFileOptions.defaults().setTtl(BUCKET1_START), (short)1);
   private static final InodeFile BUCKET1_FILE2 =
-      InodeFile.create(1, 0, "ignored", 0, CreateFileOptions.defaults().setTtl(BUCKET1_END - 1));
+      InodeFile.create(1, 0, "ignored", 0, CreateFileOptions.defaults().setTtl(BUCKET1_END - 1), (short)1);
   private static final InodeFile BUCKET2_FILE =
-      InodeFile.create(2, 0, "ignored", 0, CreateFileOptions.defaults().setTtl(BUCKET2_START));
+      InodeFile.create(2, 0, "ignored", 0, CreateFileOptions.defaults().setTtl(BUCKET2_START), (short)1);
 
   private TtlBucketList mBucketList;
 

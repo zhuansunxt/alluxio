@@ -208,7 +208,7 @@ public final class InodeDirectory extends Inode<InodeDirectory> {
     return new InodeDirectory(entry.getId())
         .setCreationTimeMs(entry.getCreationTimeMs())
         .setName(entry.getName())
-        .setParentId(entry.getParentId())
+        .setParentId(entry.getParentId(), (short)0)
         .setPersistenceState(PersistenceState.valueOf(entry.getPersistenceState()))
         .setPinned(entry.getPinned())
         .setLastModificationTimeMs(entry.getLastModificationTimeMs())
@@ -227,13 +227,14 @@ public final class InodeDirectory extends Inode<InodeDirectory> {
    * @return the {@link InodeDirectory} representation
    */
   public static InodeDirectory create(long id, long parentId, String name,
-      CreateDirectoryOptions directoryOptions) {
+      CreateDirectoryOptions directoryOptions, short depth) {
     Permission permission = new Permission(directoryOptions.getPermission());
     if (directoryOptions.isDefaultMode()) {
       permission.setMode(Mode.getDefault()).applyDirectoryUMask();
     }
+
     return new InodeDirectory(id)
-        .setParentId(parentId)
+        .setParentId(parentId, depth)
         .setName(name)
         .setPermission(permission)
         .setMountPoint(directoryOptions.isMountPoint());
