@@ -42,6 +42,10 @@ public final class InodeLockManager {
     return (int)(inodeID % lockTable.get(depth).size());
   }
 
+  public boolean inorder(long id0, long id1,  int depth) {
+    return getHash(id0, depth) < getHash(id1, depth);
+  }
+
   public void lock(Inode inode, LockMode lockMode) {
     int depth = (int)inode.getDepth();
 

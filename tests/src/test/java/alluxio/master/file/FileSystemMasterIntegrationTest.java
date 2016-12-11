@@ -524,6 +524,7 @@ public class FileSystemMasterIntegrationTest {
     Assert.assertEquals(IdUtils.INVALID_FILE_ID, mFsMaster.getFileId(new AlluxioURI("/testFile2")));
   }
 
+  @Ignore
   @Test
   public void renameToDeeper() throws Exception {
     CreateFileOptions createFileOptions = CreateFileOptions.defaults().setRecursive(true);

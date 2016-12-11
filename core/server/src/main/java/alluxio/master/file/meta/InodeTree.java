@@ -54,6 +54,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Queue;
 import java.util.Set;
+import java.util.concurrent.locks.Lock;
 
 import javax.annotation.concurrent.NotThreadSafe;
 
@@ -259,13 +260,12 @@ public final class InodeTree implements JournalCheckpointStreamable {
     boolean valid = false;
     try {
       // Lock paths in a deterministic order.
-      if (path1.compareTo(path2) > 0) {
-        traversalResult2 = traverseToInode(pathComponents2, lockMode2, lockHints);
-        traversalResult1 = traverseToInode(pathComponents1, lockMode1, lockHints);
-      } else {
-        traversalResult1 = traverseToInode(pathComponents1, lockMode1, lockHints);
-        traversalResult2 = traverseToInode(pathComponents2, lockMode2, lockHints);
-      }
+
+      TraversalResultPair res =
+              traverseToInode(pathComponents1, lockMode1, lockHints, pathComponents2, lockMode2, lockHints);
+
+      traversalResult1 = res.t0;
+      traversalResult2 = res.t1;
 
       LockedInodePath inodePath1 = new MutableLockedInodePath(path1, traversalResult1.getInodes(),
           traversalResult1.getInodeLockList());
@@ -915,6 +915,307 @@ public final class InodeTree implements JournalCheckpointStreamable {
         && Objects.equal(mCachedInode, that.mCachedInode);
   }
 
+  private class TraversalResultPair{
+    public TraversalResult t0;
+    public TraversalResult t1;
+    public TraversalResultPair(TraversalResult t0, TraversalResult t1) {
+      this.t0 = t0;
+      this.t1 = t1;
+    }
+  }
+
+  private TraversalResultPair traverseToInode(
+          String[] pathComponents0, LockMode lockMode0, List<LockMode> lockHint0,
+          String[] pathComponents1, LockMode lockMode1, List<LockMode> lockHint1
+  ) throws InvalidPathException {
+    // This must be set to true before returning a valid value, otherwise all the inodes will be
+    // unlocked.
+    List<Inode<?>> inodes0 = new ArrayList<>();
+    List<Inode<?>> inodes1 = new ArrayList<>();
+    InodeLockList lockList0 = new InodeLockList();
+    InodeLockList lockList1 = new InodeLockList();
+    boolean valid = false;
+    try {
+      if (pathComponents0 == null || pathComponents1 == null) {
+        throw new InvalidPathException(ExceptionMessage.PATH_COMPONENTS_INVALID.getMessage("null"));
+      } else if (pathComponents0.length == 0 || pathComponents1.length == 0) {
+        throw new InvalidPathException(
+                ExceptionMessage.PATH_COMPONENTS_INVALID.getMessage("empty"));
+      } else if (pathComponents0.length == 1 || pathComponents1.length == 1) {
+          throw new InvalidPathException(
+                  ExceptionMessage.PATH_COMPONENTS_INVALID_START.getMessage(pathComponents0[0]));
+      }
+
+      if (getLockModeForComponent(0, pathComponents0.length, lockMode0, lockHint0) == LockMode.READ) {
+        lockList0.lockRead(mRoot);
+      } else {
+        lockList0.lockWrite(mRoot);
+      }
+
+      if (getLockModeForComponent(0, pathComponents1.length, lockMode1, lockHint1) == LockMode.READ) {
+        lockList1.lockRead(mRoot);
+      } else {
+        lockList1.lockWrite(mRoot);
+      }
+
+      inodes0.add(mRoot);
+      inodes1.add(mRoot);
+
+      TraversalResultPair result =
+              traverseToInodeInternal(
+                      pathComponents0, inodes0, new ArrayList<Inode<?>>(), lockList0, lockMode0, lockHint0,
+                      pathComponents1, inodes1, new ArrayList<Inode<?>>(), lockList1, lockMode1, lockHint1);
+      valid = true;
+      return result;
+    } finally {
+      if (!valid) {
+        lockList0.close();
+        lockList1.close();
+      }
+    }
+  }
+
+
+
+  public void lock(InodeLockList lockList, Inode<?> inode, LockMode mode) {
+    if (mode == LockMode.READ) {
+      lockList.lockRead(inode);
+    } else {
+      lockList.lockWrite(inode);
+    }
+  }
+
+
+
+
+  private TraversalResultPair traverseToInodeInternal(
+          String[] pathComponents0, List<Inode<?>> inodes0, List<Inode<?>> nonPersistedInodes0,
+          InodeLockList lockList0, LockMode lockMode0, List<LockMode> lockHints0,
+          String[] pathComponents1, List<Inode<?>> inodes1, List<Inode<?>> nonPersistedInodes1,
+          InodeLockList lockList1, LockMode lockMode1, List<LockMode> lockHints1
+  ) throws InvalidPathException {
+    Inode<?> current0 = inodes0.get(inodes0.size() - 1);
+    Inode<?> current1 = inodes0.get(inodes1.size() - 1);
+
+    TraversalResult t0 = null, t1 = null;
+
+    int minLength = Math.min(pathComponents0.length, pathComponents1.length);
+
+    if(inodes0.size() != inodes1.size()) {
+      throw new InvalidPathException(
+              ExceptionMessage.PATH_COMPONENTS_INVALID_START.getMessage("inodes size not equal"));
+    }
+
+    int i;
+    for(i = inodes0.size(); i < minLength; i++) {
+      Inode<?> next0 = ((InodeDirectory) current0).getChild(pathComponents0[i]);
+      Inode<?> next1 = ((InodeDirectory) current1).getChild(pathComponents1[i]);
+
+
+      if (next0 == null) {
+        // true if the lock is allowed to be upgraded.
+        boolean upgradeAllowed = true;
+        if (lockHints0 != null && i - 1 < lockHints0.size()
+                && lockHints0.get(i - 1) == LockMode.READ) {
+          // If the hint is READ, the lock must be locked as READ and cannot be upgraded.
+          upgradeAllowed = false;
+        }
+        if (lockMode0 != LockMode.READ
+                && getLockModeForComponent(i - 1, pathComponents0.length, lockMode0, lockHints0)
+                == LockMode.READ && upgradeAllowed) {
+          // The target lock mode is one of the WRITE modes, but READ lock is already held. The
+          // READ lock cannot be upgraded atomically, it needs be released first before WRITE
+          // lock can be acquired. As a consequence, we need to recheck if the child we are
+          // looking for has not been created in the meantime.
+          lockList0.unlockLast();
+          lockList0.lockWrite(current0);
+          Inode<?> recheckNext = ((InodeDirectory) current0).getChild(pathComponents0[i]);
+          if (recheckNext != null) {
+            // When releasing the lock and reacquiring the lock, another thread inserted the node we
+            // are looking for. Use this existing next node.
+            next0 = recheckNext;
+          }
+        }
+        // next has to be rechecked, since it could have been concurrently reinserted.
+        if (next0 == null) {
+          // The user might want to create the nonexistent directories, so return the traversal
+          // result current inode with the last Inode taken, and the index of the first path
+          // component that couldn't be found.
+          t0 = TraversalResult.createNotFoundResult(i, nonPersistedInodes0, inodes0, lockList0);
+          t1 = traverseToInodeInternal(pathComponents1, inodes1,nonPersistedInodes1, lockList1,
+                  lockMode1, lockHints1, current1, i);
+          return new TraversalResultPair(t0, t1);
+        }
+      }
+
+      if (next1 == null) {
+        // true if the lock is allowed to be upgraded.
+        boolean upgradeAllowed = true;
+        if (lockHints1 != null && i - 1 < lockHints1.size()
+                && lockHints1.get(i - 1) == LockMode.READ) {
+          // If the hint is READ, the lock must be locked as READ and cannot be upgraded.
+          upgradeAllowed = false;
+        }
+        if (lockMode1 != LockMode.READ
+                && getLockModeForComponent(i - 1, pathComponents1.length, lockMode1, lockHints1)
+                == LockMode.READ && upgradeAllowed) {
+          // The target lock mode is one of the WRITE modes, but READ lock is already held. The
+          // READ lock cannot be upgraded atomically, it needs be released first before WRITE
+          // lock can be acquired. As a consequence, we need to recheck if the child we are
+          // looking for has not been created in the meantime.
+          lockList1.unlockLast();
+          lockList1.lockWrite(current1);
+          Inode<?> recheckNext = ((InodeDirectory) current1).getChild(pathComponents1[i]);
+          if (recheckNext != null) {
+            // When releasing the lock and reacquiring the lock, another thread inserted the node we
+            // are looking for. Use this existing next node.
+            next1 = recheckNext;
+          }
+        }
+        // next has to be rechecked, since it could have been concurrently reinserted.
+        if (next1 == null) {
+          // The user might want to create the nonexistent directories, so return the traversal
+          // result current inode with the last Inode taken, and the index of the first path
+          // component that couldn't be found.
+          t1 = TraversalResult.createNotFoundResult(i, nonPersistedInodes1, inodes1, lockList1);
+          t0 = traverseToInodeInternal(pathComponents0, inodes0, nonPersistedInodes0, lockList0,
+                  lockMode0, lockHints0, current0, i);
+          return new TraversalResultPair(t0, t1);
+        }
+      }
+
+
+
+
+      // Lock the existing next inode before proceeding.
+      LockMode mode0 = getLockModeForComponent(i, pathComponents0.length, lockMode0, lockHints0);
+      LockMode mode1 = getLockModeForComponent(i, pathComponents1.length, lockMode1, lockHints1);
+
+      if(InodeLockManager.get().inorder(next0.getId(), next1.getId(), next0.getDepth())){
+        lock(lockList0, next0, mode0);
+        lock(lockList1, next1, mode1);
+      } else {
+        lock(lockList1, next1, mode1);
+        lock(lockList0, next0, mode0);
+      }
+
+
+      if (next0.isFile()) {
+        // The inode can't have any children. If this is the last path component, we're good.
+        // Otherwise, we can't traverse further, so we clean up and throw an exception.
+        if (i == pathComponents0.length - 1) {
+          inodes0.add(next0);
+          t0 = TraversalResult.createFoundResult(nonPersistedInodes0, inodes0, lockList0);
+        } else {
+          throw new InvalidPathException(
+                  "Traversal failed. Component " + i + "(" + next0.getName() + ") is a file");
+        }
+      } else {
+        inodes0.add(next0);
+        if (!next0.isPersisted()) {
+          nonPersistedInodes0.add(next0);
+        }
+        current0 = next0;
+      }
+
+      if (next1.isFile()) {
+        if (i == pathComponents0.length - 1) {
+          inodes1.add(next0);
+          t1 = TraversalResult.createFoundResult(nonPersistedInodes1, inodes1, lockList1);
+        } else {
+          throw new InvalidPathException(
+                  "Traversal failed. Component " + i + "(" + next1.getName() + ") is a file");
+        }
+      } else {
+        inodes1.add(next1);
+        if (!next1.isPersisted()) {
+          nonPersistedInodes0.add(next1);
+        }
+        current1 = next1;
+      }
+    }
+
+    if (i < pathComponents0.length) {
+      t0 = traverseToInodeInternal(pathComponents0, inodes0, nonPersistedInodes0, lockList0,
+              lockMode0, lockHints0, current0, i);
+    }
+    if(i < pathComponents1.length) {
+      t1 = traverseToInodeInternal(pathComponents1, inodes1,nonPersistedInodes1, lockList1,
+              lockMode1, lockHints1, current1, i);
+    }
+
+    return new TraversalResultPair(t0, t1);
+
+  }
+
+  private TraversalResult traverseToInodeInternal(String[] pathComponents, List<Inode<?>> inodes,
+                                                  List<Inode<?>> nonPersistedInodes, InodeLockList lockList, LockMode lockMode,
+                                                  List<LockMode> lockHints, Inode<?> current, int i)
+          throws InvalidPathException {
+    for (; i < pathComponents.length; i++) {
+      Inode<?> next = ((InodeDirectory) current).getChild(pathComponents[i]);
+      if (next == null) {
+        // true if the lock is allowed to be upgraded.
+        boolean upgradeAllowed = true;
+        if (lockHints != null && i - 1 < lockHints.size()
+                && lockHints.get(i - 1) == LockMode.READ) {
+          // If the hint is READ, the lock must be locked as READ and cannot be upgraded.
+          upgradeAllowed = false;
+        }
+        if (lockMode != LockMode.READ
+                && getLockModeForComponent(i - 1, pathComponents.length, lockMode, lockHints)
+                == LockMode.READ && upgradeAllowed) {
+          // The target lock mode is one of the WRITE modes, but READ lock is already held. The
+          // READ lock cannot be upgraded atomically, it needs be released first before WRITE
+          // lock can be acquired. As a consequence, we need to recheck if the child we are
+          // looking for has not been created in the meantime.
+          lockList.unlockLast();
+          lockList.lockWrite(current);
+          Inode<?> recheckNext = ((InodeDirectory) current).getChild(pathComponents[i]);
+          if (recheckNext != null) {
+            // When releasing the lock and reacquiring the lock, another thread inserted the node we
+            // are looking for. Use this existing next node.
+            next = recheckNext;
+          }
+        }
+        // next has to be rechecked, since it could have been concurrently reinserted.
+        if (next == null) {
+          // The user might want to create the nonexistent directories, so return the traversal
+          // result current inode with the last Inode taken, and the index of the first path
+          // component that couldn't be found.
+          return TraversalResult.createNotFoundResult(i, nonPersistedInodes, inodes, lockList);
+        }
+      }
+      // Lock the existing next inode before proceeding.
+      if (getLockModeForComponent(i, pathComponents.length, lockMode, lockHints)
+              == LockMode.READ) {
+        lockList.lockRead(next);
+      } else {
+        lockList.lockWrite(next);
+      }
+      if (next.isFile()) {
+        // The inode can't have any children. If this is the last path component, we're good.
+        // Otherwise, we can't traverse further, so we clean up and throw an exception.
+        if (i == pathComponents.length - 1) {
+          inodes.add(next);
+          return TraversalResult.createFoundResult(nonPersistedInodes, inodes, lockList);
+        } else {
+          throw new InvalidPathException(
+                  "Traversal failed. Component " + i + "(" + next.getName() + ") is a file");
+        }
+      } else {
+        inodes.add(next);
+        if (!next.isPersisted()) {
+          // next is a directory and not persisted
+          nonPersistedInodes.add(next);
+        }
+        current = next;
+      }
+    }
+    return TraversalResult.createFoundResult(nonPersistedInodes, inodes, lockList);
+  }
+
+
   /**
    * Traverses the tree to find the given path components. Hints for the lock mode at each path
    * component can be specified.
@@ -1010,68 +1311,8 @@ public final class InodeTree implements JournalCheckpointStreamable {
       List<Inode<?>> nonPersistedInodes, InodeLockList lockList, LockMode lockMode,
       List<LockMode> lockHints)
       throws InvalidPathException {
-    Inode<?> current = inodes.get(inodes.size() - 1);
-    for (int i = inodes.size(); i < pathComponents.length; i++) {
-      Inode<?> next = ((InodeDirectory) current).getChild(pathComponents[i]);
-      if (next == null) {
-        // true if the lock is allowed to be upgraded.
-        boolean upgradeAllowed = true;
-        if (lockHints != null && i - 1 < lockHints.size()
-            && lockHints.get(i - 1) == LockMode.READ) {
-          // If the hint is READ, the lock must be locked as READ and cannot be upgraded.
-          upgradeAllowed = false;
-        }
-        if (lockMode != LockMode.READ
-            && getLockModeForComponent(i - 1, pathComponents.length, lockMode, lockHints)
-            == LockMode.READ && upgradeAllowed) {
-          // The target lock mode is one of the WRITE modes, but READ lock is already held. The
-          // READ lock cannot be upgraded atomically, it needs be released first before WRITE
-          // lock can be acquired. As a consequence, we need to recheck if the child we are
-          // looking for has not been created in the meantime.
-          lockList.unlockLast();
-          lockList.lockWrite(current);
-          Inode<?> recheckNext = ((InodeDirectory) current).getChild(pathComponents[i]);
-          if (recheckNext != null) {
-            // When releasing the lock and reacquiring the lock, another thread inserted the node we
-            // are looking for. Use this existing next node.
-            next = recheckNext;
-          }
-        }
-        // next has to be rechecked, since it could have been concurrently reinserted.
-        if (next == null) {
-          // The user might want to create the nonexistent directories, so return the traversal
-          // result current inode with the last Inode taken, and the index of the first path
-          // component that couldn't be found.
-          return TraversalResult.createNotFoundResult(i, nonPersistedInodes, inodes, lockList);
-        }
-      }
-      // Lock the existing next inode before proceeding.
-      if (getLockModeForComponent(i, pathComponents.length, lockMode, lockHints)
-          == LockMode.READ) {
-        lockList.lockRead(next);
-      } else {
-        lockList.lockWrite(next);
-      }
-      if (next.isFile()) {
-        // The inode can't have any children. If this is the last path component, we're good.
-        // Otherwise, we can't traverse further, so we clean up and throw an exception.
-        if (i == pathComponents.length - 1) {
-          inodes.add(next);
-          return TraversalResult.createFoundResult(nonPersistedInodes, inodes, lockList);
-        } else {
-          throw new InvalidPathException(
-              "Traversal failed. Component " + i + "(" + next.getName() + ") is a file");
-        }
-      } else {
-        inodes.add(next);
-        if (!next.isPersisted()) {
-          // next is a directory and not persisted
-          nonPersistedInodes.add(next);
-        }
-        current = next;
-      }
-    }
-    return TraversalResult.createFoundResult(nonPersistedInodes, inodes, lockList);
+    return traverseToInodeInternal(pathComponents, inodes, nonPersistedInodes, lockList,
+            lockMode, lockHints, inodes.get(inodes.size() - 1),inodes.size());
   }
 
   private static final class TraversalResult {
