@@ -17,6 +17,7 @@ import alluxio.security.authorization.Permission;
 import alluxio.wire.FileInfo;
 
 import com.google.common.base.Objects;
+import org.glassfish.hk2.api.Self;
 
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
@@ -44,7 +45,6 @@ public abstract class Inode<T> implements JournalEntryRepresentable {
   private String mGroup;
   private short mMode;
 
-  private final ReentrantReadWriteLock mLock;
 
   protected Inode(long id, boolean isDirectory) {
     mCreationTimeMs = System.currentTimeMillis();
@@ -59,7 +59,6 @@ public abstract class Inode<T> implements JournalEntryRepresentable {
     mPersistenceState = PersistenceState.NOT_PERSISTED;
     mPinned = false;
     mOwner = "";
-    mLock = new ReentrantReadWriteLock();
   }
 
   /**
@@ -280,42 +279,42 @@ public abstract class Inode<T> implements JournalEntryRepresentable {
    * Acquires the read lock for this inode.
    */
   public void lockRead() {
-    mLock.readLock().lock();
+    InodeLockManager.get().lock(this, InodeLockManager.LockMode.READ);
   }
 
   /**
    * Releases the read lock for this inode.
    */
   public void unlockRead() {
-    mLock.readLock().unlock();
+    InodeLockManager.get().unlock(this, InodeLockManager.LockMode.READ);
   }
 
   /**
    * Acquires the write lock for this inode.
    */
   public void lockWrite() {
-    mLock.writeLock().lock();
+    InodeLockManager.get().lock(this, InodeLockManager.LockMode.WRITE);
   }
 
   /**
    * Releases the write lock for this inode.
    */
   public void unlockWrite() {
-    mLock.writeLock().unlock();
+    InodeLockManager.get().unlock(this, InodeLockManager.LockMode.WRITE);
   }
 
   /**
    * @return returns true if the current thread holds a write lock on this inode, false otherwise
    */
   public boolean isWriteLocked() {
-    return mLock.isWriteLockedByCurrentThread();
+    return InodeLockManager.get().isWriteLocked(this);
   }
 
   /**
    * @return returns true if the current thread holds a read lock on this inode, false otherwise
    */
   public boolean isReadLocked() {
-    return mLock.getReadHoldCount() > 0;
+    return InodeLockManager.get().isReadLocked(this);
   }
 
   @Override
