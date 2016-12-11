@@ -16,10 +16,7 @@ import alluxio.master.journal.JournalEntryRepresentable;
 import alluxio.security.authorization.Permission;
 import alluxio.wire.FileInfo;
 
-import com.fasterxml.jackson.databind.ser.impl.FailingSerializer;
 import com.google.common.base.Objects;
-
-import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import javax.annotation.concurrent.NotThreadSafe;
 

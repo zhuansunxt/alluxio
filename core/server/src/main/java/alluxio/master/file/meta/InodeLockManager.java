@@ -3,7 +3,6 @@ package alluxio.master.file.meta;
 import javax.annotation.concurrent.ThreadSafe;
 
 import com.google.common.base.Preconditions;
-import com.sun.javafx.collections.MappingChange;
 import io.netty.util.internal.chmv8.ConcurrentHashMapV8;
 
 import java.util.Map;
