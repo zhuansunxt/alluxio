@@ -1,6 +1,7 @@
 package alluxio.master.file.meta;
 
 import java.util.ArrayList;
+import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
@@ -42,8 +43,17 @@ public final class InodeLockManager {
     return (int)(inodeID % lockTable.get(depth).size());
   }
 
+  private Lock getLockFromTable(Inode inode, LockMode lockMode) {
+    int depth = inode.getDepth();
+    int hash = getHash(inode.getId(), depth);
+    ReentrantReadWriteLock lock = lockTable.get(depth).get(hash);
+    Lock rwlock = lockMode == LockMode.READ ? lock.readLock() : lock.writeLock();
+
+    return rwlock;
+  }
+
   public void lock(Inode inode, LockMode lockMode) {
-    int depth = (int)inode.getDepth();
+    int depth = inode.getDepth();
 
     if (depth >= lockTable.size()) {
       if (depth > lockTable.size()) {
@@ -65,29 +75,50 @@ public final class InodeLockManager {
         tableLock.unlock();
       }
     }
-    int hash = getHash(inode.getId(), depth);
 
-//    System.out.printf("id %d, hash %d, depth %d%n",inode.getId(), hash, depth );
-    if (lockMode == LockMode.READ) {
-      lockTable.get(depth).get(hash).readLock().lock();
-    } else {
-      lockTable.get(depth).get(hash).writeLock().lock();
-    }
+    getLockFromTable(inode, lockMode).lock();
   }
 
   public void unlock(Inode inode, LockMode lockMode) {
-    int depth = (int)inode.getDepth();
-    int hash = getHash(inode.getId(), depth);
+    getLockFromTable(inode, lockMode).unlock();
+  }
 
-    if (lockMode == LockMode.READ) {
-      lockTable.get(depth).get(hash).readLock().unlock();
+  public void lockPair(Inode inode1, Inode inode2, LockMode lockMode1, LockMode lockMode2) {
+    // assumption: two inodes' layer should not exceed the max layer in lock table.
+
+    int hash1 = getHash(inode1.getId(), inode1.getDepth());
+    int hash2 = getHash(inode2.getId(), inode2.getDepth());
+    Lock rwlock1 = getLockFromTable(inode1, lockMode1);
+    Lock rwlock2 = getLockFromTable(inode2, lockMode2);
+
+    if (hash1 < hash2) {
+      rwlock1.lock();
+      rwlock2.lock();
     } else {
-      lockTable.get(depth).get(hash).writeLock().unlock();
+      rwlock2.lock();
+      rwlock1.lock();
+    }
+  }
+
+  public void unlockPair(Inode inode1, Inode inode2, LockMode lockMode1, LockMode lockMode2) {
+    // assumption: two inodes' layer should not exceed the max layer in lock table.
+
+    int hash1 = getHash(inode1.getId(), inode1.getDepth());
+    int hash2 = getHash(inode2.getId(), inode2.getDepth());
+    Lock rwlock1 = getLockFromTable(inode1, lockMode1);
+    Lock rwlock2 = getLockFromTable(inode2, lockMode2);
+
+    if (hash1 < hash2) {
+      rwlock2.unlock();
+      rwlock1.unlock();
+    } else {
+      rwlock1.unlock();
+      rwlock2.unlock();
     }
   }
 
   public boolean isReadLocked(Inode inode) {
-    int depth = (int)inode.getDepth();
+    int depth = inode.getDepth();
     if (depth >= lockTable.size()) {
       return false;
     }
@@ -97,7 +128,7 @@ public final class InodeLockManager {
   }
 
   public boolean isWriteLocked(Inode inode) {
-    int depth = (int)inode.getDepth();
+    int depth = inode.getDepth();
     if (depth >= lockTable.size()) {
       return false;
     }

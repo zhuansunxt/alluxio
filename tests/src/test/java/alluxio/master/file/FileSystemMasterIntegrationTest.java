@@ -206,6 +206,7 @@ public class FileSystemMasterIntegrationTest {
     concurrentFreer.call();
   }
 
+  @Ignore
   @Test
   public void concurrentRename() throws Exception {
     ConcurrentCreator concurrentCreator =
