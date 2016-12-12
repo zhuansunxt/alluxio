@@ -66,7 +66,17 @@ public final class InodeLockManager {
       try {
         if (depth == lockTable.size()) {
           lockTable.add(new ArrayList());
-          int lockCount = Math.min(512, (depth+1) * (depth+1));
+//          int lockCount = Math.min(512, (depth+1) * (depth+1));
+//          for (int i = 0; i < lockCount; i++) {
+//            lockTable.get(depth).add(new ReentrantReadWriteLock());
+//          }
+          // this hardcode setting is for experimental usage.
+          int lockCount;
+          if (depth == 0 || depth == 1) {
+            lockCount = 1;
+          } else {
+            lockCount = 1000;
+          }
           for (int i = 0; i < lockCount; i++) {
             lockTable.get(depth).add(new ReentrantReadWriteLock());
           }
@@ -135,6 +145,11 @@ public final class InodeLockManager {
 
     int hash = getHash(inode.getId(), depth);
     return lockTable.get(depth).get(hash).isWriteLockedByCurrentThread();
+  }
 
+  public void printLockTableLevel() {
+    for (int i = 0; i < lockTable.size(); i++) {
+      System.out.println("Level " + i + ", #locks: " + lockTable.get(i).size());
+    }
   }
 }
